@@ -116,7 +116,7 @@ export function buildDocXml(currentResult: any, config: any) {
   const shiftOrd: Record<string, number> = { N: 0, C: 1, K: 2 };
   const MAX_PER_ROW = 4;
 
-  const allResults = [d];
+  const allResults = d.allResults;
   const extraRows = d.extraRows || [];
 
   const swapRows = extraRows.filter((r: any) => r.isSwap);
@@ -330,7 +330,9 @@ export async function exportWord(currentResult: any, config: any) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const fname = 'Lich_truc_thay_' + currentResult.ten.replace(/\s+/g, '_') + '.docx';
+  const fname = currentResult.allResults && currentResult.allResults.length > 1
+    ? 'Lich_truc_thay_' + currentResult.allResults.map((r: any) => r.ten.split(' ').pop()).join('_') + '.docx'
+    : 'Lich_truc_thay_' + currentResult.ten.replace(/\s+/g, '_') + '.docx';
   a.download = fname;
   document.body.appendChild(a);
   a.click();
