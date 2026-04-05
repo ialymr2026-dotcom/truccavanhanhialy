@@ -46,8 +46,13 @@ if (admin.apps.length === 0) {
   }
 }
 // const firestore = admin.firestore(); // Initialize lazily
-const getFirestore = () => {
+const getFirestore = (useDefault = false) => {
   try {
+    if (useDefault) {
+      console.log("Using default Firestore database");
+      return admin.firestore();
+    }
+    
     // Priority: 1. Environment variable 2. Config file 3. Default
     const dbId = process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
     
@@ -57,19 +62,14 @@ const getFirestore = () => {
     }
     return admin.firestore();
   } catch (e) {
-    console.error("Error getting Firestore instance, falling back to default:", e);
+    console.error("Error getting Firestore instance:", e);
     return admin.firestore();
   }
 };
 
 const saveTokens = async (newTokens: any) => {
-  try {
-    const firestore = getFirestore();
-    const docRef = firestore.collection("config").doc("google_auth");
-    
-    console.log("Saving tokens to Firestore (config/google_auth)...");
-    
-    // Attempt to merge with existing tokens to preserve refresh_token
+  const trySave = async (db: any) => {
+    const docRef = db.collection("config").doc("google_auth");
     const existingDoc = await docRef.get();
     let finalTokens = { ...newTokens };
     
@@ -85,21 +85,49 @@ const saveTokens = async (newTokens: any) => {
       tokens: finalTokens,
       updatedAt: new Date().toISOString()
     });
-    console.log("Tokens saved to Firestore successfully.");
+  };
+
+  try {
+    console.log("Saving tokens to Firestore...");
+    try {
+      await trySave(getFirestore());
+      console.log("Tokens saved to Firestore successfully.");
+    } catch (e: any) {
+      if (e.code === 5 || e.message?.includes("NOT_FOUND")) {
+        console.warn("Named database not found, trying default database for save...");
+        await trySave(getFirestore(true));
+        console.log("Tokens saved to default Firestore successfully.");
+      } else {
+        throw e;
+      }
+    }
   } catch (e) {
     console.error("Error saving tokens to Firestore:", e);
   }
 };
 
 const loadTokens = async () => {
-  try {
-    const firestore = getFirestore();
-    console.log("Attempting to load tokens from Firestore (config/google_auth)...");
-    const doc = await firestore.collection("config").doc("google_auth").get();
+  const tryLoad = async (db: any) => {
+    const doc = await db.collection("config").doc("google_auth").get();
     if (doc.exists) {
-      const tokens = doc.data()?.tokens;
-      console.log("Tokens found in Firestore:", !!tokens);
-      return tokens || null;
+      return doc.data()?.tokens || null;
+    }
+    return null;
+  };
+
+  try {
+    console.log("Attempting to load tokens from Firestore...");
+    try {
+      const tokens = await tryLoad(getFirestore());
+      if (tokens) return tokens;
+    } catch (e: any) {
+      if (e.code === 5 || e.message?.includes("NOT_FOUND")) {
+        console.warn("Named database not found, trying default database for load...");
+        const tokens = await tryLoad(getFirestore(true));
+        if (tokens) return tokens;
+      } else {
+        throw e;
+      }
     }
     console.log("No tokens document found in Firestore.");
   } catch (e) {
@@ -231,12 +259,14 @@ app.get("/api/debug/auth", async (req, res) => {
   res.json({
     has_service_account: !!process.env.FIREBASE_SERVICE_ACCOUNT,
     firebase_project_id: firebaseConfig.projectId,
+    firestore_database_id: firebaseConfig.firestoreDatabaseId,
     firestore_tokens_exist: !!firestoreTokens,
     cookie_tokens_exist: !!req.cookies.google_tokens,
     env_vars: {
       GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
-      APP_URL: process.env.APP_URL
+      APP_URL: process.env.APP_URL,
+      FIREBASE_DATABASE_ID: !!process.env.FIREBASE_DATABASE_ID
     }
   });
 });
