@@ -7,7 +7,20 @@ import dotenv from "dotenv";
 
 import fs from "fs";
 import admin from "firebase-admin";
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf-8"));
+let firebaseConfig: any = {};
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  } else {
+    console.warn("firebase-applet-config.json not found, using environment variables if available");
+    firebaseConfig = {
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT,
+    };
+  }
+} catch (e) {
+  console.error("Error loading firebase-applet-config.json:", e);
+}
 
 dotenv.config();
 
@@ -93,13 +106,21 @@ app.get("/api/debug/env", (req, res) => {
 
 // Auth Routes
 app.get("/api/auth/google", (req, res) => {
-  const oauth2Client = getOAuth2Client();
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email"],
-    prompt: "consent"
-  });
-  res.redirect(url);
+  try {
+    const oauth2Client = getOAuth2Client();
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email"],
+      prompt: "consent"
+    });
+    res.redirect(url);
+  } catch (error) {
+    console.error("Error generating Auth URL:", error);
+    res.status(500).json({ 
+      error: "Failed to generate Google Auth URL", 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
 });
 
 app.get("/api/auth/google/url", (req, res) => {
