@@ -16,7 +16,15 @@ export default function App() {
       localStorage.setItem('sv', 'v4');
       return DEFAULT_STAFF;
     }
-    return saved ? JSON.parse(saved) : DEFAULT_STAFF;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error("Failed to parse local staffData", e);
+      }
+    }
+    return DEFAULT_STAFF;
   });
 
   const [ngayBatDau, setNgayBatDau] = useState(() => fmtIn(new Date()));
@@ -90,7 +98,7 @@ export default function App() {
         // Fetch app settings
         const res = await fetch('/api/app-settings');
         const data = await res.json();
-        if (data.staffData) {
+        if (data.staffData && Array.isArray(data.staffData)) {
           setStaffData(data.staffData);
           localStorage.setItem('sd', JSON.stringify(data.staffData));
         }
