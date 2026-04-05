@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { fmtVN, abbrev } from './shiftHelpers';
+import { SIGNATURES } from '../constants/signatures';
 
 function xe(s: string) {
   return String(s)
@@ -24,6 +25,22 @@ function wpara(content: string, o: any = {}) {
   const spB = o.spBefore || 0, spA = o.spAfter || 0;
   const indent = o.indent ? '<w:ind w:left="' + o.indent.left + '"/>' : '';
   return '<w:p><w:pPr><w:jc w:val="' + align + '"/><w:spacing w:before="' + spB + '" w:after="' + spA + '"/>' + indent + '</w:pPr>' + content + '</w:p>';
+}
+
+function wimage(rId: string, width: number = 1500000, height: number = 800000) {
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+    + '<wp:extent cx="' + width + '" cy="' + height + '"/>'
+    + '<wp:docPr id="1" name="Picture 1"/>'
+    + '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+    + '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+    + '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+    + '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+    + '<pic:nvPicPr><pic:cNvPr id="0" name="Signature.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+    + '<pic:blipFill><a:blip r:embed="' + rId + '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>'
+    + '<a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+    + '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + width + '" cy="' + height + '"/></a:xfrm>'
+    + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+    + '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
 }
 
 function emptyP(spB: number = 0, spA: number = 0) {
@@ -469,7 +486,7 @@ export async function generateWordBlob(currentResult: any, config: any) {
   });
 }
 
-export function buildSwapDocXml(swapData: any, config: any) {
+export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
   const { date1, date2, person1, person2, shift1, shift2 } = swapData;
   const nguoiKy = config.nguoiKy || 'Nguyễn Văn Nghị';
   const ngayKyVal = config.ngayKy || '';
@@ -513,6 +530,10 @@ export function buildSwapDocXml(swapData: any, config: any) {
     wpara(wrun(`Các chức danh kiểm tra lại lịch trực của mình và tự chịu trách nhiệm trước Phân xưởng nếu không đi ca theo đúng lịch đã đổi./.`, { size: 26 }), { spBefore: 120, indent: { left: 720 } })
   ].join('');
 
+  const sig1 = rIds.person1 ? wpara(wimage(rIds.person1), { align: 'center' }) : emptyP(1000, 0);
+  const sig2 = rIds.person2 ? wpara(wimage(rIds.person2), { align: 'center' }) : emptyP(1000, 0);
+  const sigManager = rIds.manager ? wpara(wimage(rIds.manager), { align: 'center' }) : emptyP(1000, 0);
+
   const footTbl = wtable([
     wtr([
       wtc({
@@ -525,13 +546,13 @@ export function buildSwapDocXml(swapData: any, config: any) {
       wtc({
         w: 3180, borders: false, content:
           wpara(wrun('NGƯỜI ĐỔI CA', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
-          + emptyP(1000, 0)
+          + sig1
           + wpara(wrun(person1, { bold: true, size: 24 }), { align: 'center' })
       }),
       wtc({
         w: 3180, borders: false, content:
           wpara(wrun('NGƯỜI ĐI CA THAY', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
-          + emptyP(1000, 0)
+          + sig2
           + wpara(wrun(person2, { bold: true, size: 24 }), { align: 'center' })
       })
     ]),
@@ -540,7 +561,7 @@ export function buildSwapDocXml(swapData: any, config: any) {
       wtc({
         w: 3180, borders: false, content:
           wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 200 })
-          + emptyP(1000, 0)
+          + sigManager
           + wpara(wrun(nguoiKy, { bold: true, size: 24 }), { align: 'center' })
       }),
       wtc({ w: 3180, borders: false, content: emptyP() })
@@ -548,7 +569,11 @@ export function buildSwapDocXml(swapData: any, config: any) {
   ], [3000, 3180, 3180]);
 
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    + 'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    + 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+    + 'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+    + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
     + '<w:body>'
     + hdrTbl + soNgayTbl + title + content + footTbl
     + '<w:sectPr>'
@@ -558,13 +583,35 @@ export function buildSwapDocXml(swapData: any, config: any) {
     + '</w:body></w:document>';
 }
 
-export async function generateSwapBlob(swapData: any, config: any) {
-  const docXml = buildSwapDocXml(swapData, config);
+export async function generateSwapBlob(swapData: any, config: any, signaturesOverride?: Record<string, string>) {
+  const { person1, person2 } = swapData;
+  const nguoiKy = config.nguoiKy || 'Nguyễn Văn Nghị';
+  
+  const rIds: any = {};
+  const imagesToAdd: any = [];
+
+  const sig1 = signaturesOverride?.[person1] || SIGNATURES[person1];
+  const sig2 = signaturesOverride?.[person2] || SIGNATURES[person2];
+
+  const isValidBase64 = (s: string) => s && s.length > 50 && !s.includes("PLACEHOLDER");
+
+  if (isValidBase64(sig1)) {
+    rIds.person1 = 'rIdImg1';
+    imagesToAdd.push({ id: 'rIdImg1', data: sig1, name: 'sig1.png' });
+  }
+  if (isValidBase64(sig2)) {
+    rIds.person2 = 'rIdImg2';
+    imagesToAdd.push({ id: 'rIdImg2', data: sig2, name: 'sig2.png' });
+  }
+
+  const docXml = buildSwapDocXml(swapData, config, rIds);
 
   const CT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
     + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
     + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Default Extension="png" ContentType="image/png"/>'
+    + '<Default Extension="jpg" ContentType="image/jpeg"/>'
     + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
     + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
     + '</Types>';
@@ -574,10 +621,14 @@ export async function generateSwapBlob(swapData: any, config: any) {
     + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
     + '</Relationships>';
 
-  const WRELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  let WRELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
-    + '</Relationships>';
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+  
+  imagesToAdd.forEach((img: any) => {
+    WRELS += `<Relationship Id="${img.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.name}"/>`;
+  });
+  WRELS += '</Relationships>';
 
   const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
@@ -596,6 +647,12 @@ export async function generateSwapBlob(swapData: any, config: any) {
   zip.file('word/_rels/document.xml.rels', WRELS);
   zip.file('word/styles.xml', STYLES);
   zip.file('word/document.xml', docXml);
+  
+  imagesToAdd.forEach((img: any) => {
+    // Remove data:image/png;base64, prefix if exists
+    const base64Data = img.data.replace(/^data:image\/(png|jpeg);base64,/, "");
+    zip.file(`word/media/${img.name}`, base64Data, { base64: true });
+  });
 
   return await zip.generateAsync({
     type: 'blob',
@@ -604,8 +661,8 @@ export async function generateSwapBlob(swapData: any, config: any) {
   });
 }
 
-export async function exportSwapDoc(swapData: any, config: any) {
-  const blob = await generateSwapBlob(swapData, config);
+export async function exportSwapDoc(swapData: any, config: any, signaturesOverride?: Record<string, string>) {
+  const blob = await generateSwapBlob(swapData, config, signaturesOverride);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
