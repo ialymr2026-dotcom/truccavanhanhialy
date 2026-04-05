@@ -15,12 +15,42 @@
         }
       },
       "required": ["tokens", "updatedAt"]
+    },
+    "Signature": {
+      "title": "Employee Signature",
+      "description": "Stores base64 signature image for an employee",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "data": { "type": "string", "description": "Base64 image data" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "data", "updatedAt"]
+    },
+    "AppConfig": {
+      "title": "Application Configuration",
+      "description": "Stores general app settings and staff list",
+      "type": "object",
+      "properties": {
+        "staffData": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "config": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["staffData", "config", "updatedAt"]
     }
   },
   "firestore": {
     "/config/google_auth": {
       "schema": "GoogleAuth",
       "description": "The single document storing the shared Google authentication"
+    },
+    "/config/app_settings": {
+      "schema": "AppConfig",
+      "description": "Shared application settings and staff list"
+    },
+    "/signatures/{name}": {
+      "schema": "Signature",
+      "description": "Signatures for each employee"
     }
   }
 }

@@ -216,6 +216,73 @@ const getOAuth2Client = () => {
   );
 };
 
+// Signature Management Endpoints
+app.get("/api/signatures", async (req, res) => {
+  try {
+    const db = getFirestoreInstance();
+    const snapshot = await db.collection("signatures").get();
+    const signatures: Record<string, string> = {};
+    snapshot.forEach(doc => {
+      signatures[doc.id] = doc.data().data;
+    });
+    res.json(signatures);
+  } catch (e: any) {
+    console.error("Error fetching signatures:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/signatures", express.json({ limit: '10mb' }), async (req, res) => {
+  const { name, data } = req.body;
+  if (!name || !data) {
+    return res.status(400).json({ error: "Name and data are required" });
+  }
+  try {
+    const db = getFirestoreInstance();
+    await db.collection("signatures").doc(name).set({
+      name,
+      data,
+      updatedAt: new Date().toISOString()
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("Error saving signature:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// App Settings Endpoints (Staff List & Config)
+app.get("/api/app-settings", async (req, res) => {
+  try {
+    const db = getFirestoreInstance();
+    const doc = await db.collection("config").doc("app_settings").get();
+    if (doc.exists) {
+      res.json(doc.data());
+    } else {
+      res.json({ staffData: null, config: null });
+    }
+  } catch (e: any) {
+    console.error("Error fetching app settings:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/app-settings", express.json({ limit: '5mb' }), async (req, res) => {
+  const { staffData, config } = req.body;
+  try {
+    const db = getFirestoreInstance();
+    await db.collection("config").doc("app_settings").set({
+      staffData,
+      config,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("Error saving app settings:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/debug/env", (req, res) => {
   const id = process.env.GOOGLE_CLIENT_ID || "";
   const secret = process.env.GOOGLE_CLIENT_SECRET || "";
