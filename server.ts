@@ -48,12 +48,27 @@ if (admin.apps.length === 0) {
 // const firestore = admin.firestore(); // Initialize lazily
 const getFirestore = () => admin.firestore();
 
-const saveTokens = async (tokens: any) => {
+const saveTokens = async (newTokens: any) => {
   try {
     const firestore = getFirestore();
+    const docRef = firestore.collection("config").doc("google_auth");
+    
     console.log("Saving tokens to Firestore (config/google_auth)...");
-    await firestore.collection("config").doc("google_auth").set({
-      tokens,
+    
+    // Attempt to merge with existing tokens to preserve refresh_token
+    const existingDoc = await docRef.get();
+    let finalTokens = { ...newTokens };
+    
+    if (existingDoc.exists) {
+      const existingTokens = existingDoc.data()?.tokens;
+      if (!finalTokens.refresh_token && existingTokens?.refresh_token) {
+        console.log("Preserving existing refresh_token from Firestore.");
+        finalTokens.refresh_token = existingTokens.refresh_token;
+      }
+    }
+
+    await docRef.set({
+      tokens: finalTokens,
       updatedAt: new Date().toISOString()
     });
     console.log("Tokens saved to Firestore successfully.");
@@ -128,7 +143,7 @@ app.get("/api/auth/google", (req, res) => {
     const url = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email"],
-      prompt: "consent"
+      // prompt: "consent" // Only use consent if we really need a new refresh token
     });
     res.redirect(url);
   } catch (error) {
