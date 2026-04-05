@@ -257,7 +257,22 @@ app.get("/api/app-settings", async (req, res) => {
     const db = getFirestoreInstance();
     const doc = await db.collection("config").doc("app_settings").get();
     if (doc.exists) {
-      res.json(doc.data());
+      const data = doc.data();
+      if (data) {
+        if (typeof data.staffData === 'string') {
+          try {
+            data.staffData = JSON.parse(data.staffData);
+          } catch (e) {
+            console.error("Failed to parse staffData JSON", e);
+            data.staffData = []; // Fallback to empty array on parse error
+          }
+        }
+        // Ensure it's an array
+        if (!Array.isArray(data.staffData)) {
+          data.staffData = [];
+        }
+      }
+      res.json(data);
     } else {
       res.json({ staffData: null, config: null });
     }
@@ -271,8 +286,11 @@ app.post("/api/app-settings", express.json({ limit: '5mb' }), async (req, res) =
   const { staffData, config } = req.body;
   try {
     const db = getFirestoreInstance();
+    // Firestore does not support nested arrays, so we stringify staffData
+    const serializedStaffData = JSON.stringify(staffData);
+    
     await db.collection("config").doc("app_settings").set({
-      staffData,
+      staffData: serializedStaffData,
       config,
       updatedAt: new Date().toISOString()
     }, { merge: true });
