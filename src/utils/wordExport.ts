@@ -561,7 +561,7 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
       wtc({
         w: 3180, borders: false, content:
           wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 200 })
-          + sigManager
+          + emptyP(500, 0) + emptyP(500, 0) 
           + wpara(wrun(nguoiKy, { bold: true, size: 24 }), { align: 'center' })
       }),
       wtc({ w: 3180, borders: false, content: emptyP() })
