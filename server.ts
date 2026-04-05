@@ -51,11 +51,12 @@ const getFirestore = () => admin.firestore();
 const saveTokens = async (tokens: any) => {
   try {
     const firestore = getFirestore();
+    console.log("Saving tokens to Firestore (config/google_auth)...");
     await firestore.collection("config").doc("google_auth").set({
       tokens,
       updatedAt: new Date().toISOString()
     });
-    console.log("Tokens saved to Firestore");
+    console.log("Tokens saved to Firestore successfully.");
   } catch (e) {
     console.error("Error saving tokens to Firestore:", e);
   }
@@ -64,10 +65,14 @@ const saveTokens = async (tokens: any) => {
 const loadTokens = async () => {
   try {
     const firestore = getFirestore();
+    console.log("Attempting to load tokens from Firestore (config/google_auth)...");
     const doc = await firestore.collection("config").doc("google_auth").get();
     if (doc.exists) {
-      return doc.data()?.tokens || null;
+      const tokens = doc.data()?.tokens;
+      console.log("Tokens found in Firestore:", !!tokens);
+      return tokens || null;
     }
+    console.log("No tokens document found in Firestore.");
   } catch (e) {
     console.error("Error loading tokens from Firestore:", e);
   }
@@ -181,8 +186,30 @@ app.get("/api/auth/google/callback", async (req, res) => {
 });
 
 app.get("/api/auth/status", async (req, res) => {
-  const tokens = req.cookies.google_tokens || await loadTokens();
-  res.json({ authenticated: !!tokens });
+  const cookieTokens = req.cookies.google_tokens;
+  const firestoreTokens = await loadTokens();
+  
+  console.log("Auth Status Check - Cookie:", !!cookieTokens, "Firestore:", !!firestoreTokens);
+  
+  res.json({ 
+    authenticated: !!cookieTokens || !!firestoreTokens,
+    source: cookieTokens ? "cookie" : (firestoreTokens ? "firestore" : "none")
+  });
+});
+
+app.get("/api/debug/auth", async (req, res) => {
+  const firestoreTokens = await loadTokens();
+  res.json({
+    has_service_account: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+    firebase_project_id: firebaseConfig.projectId,
+    firestore_tokens_exist: !!firestoreTokens,
+    cookie_tokens_exist: !!req.cookies.google_tokens,
+    env_vars: {
+      GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+      APP_URL: process.env.APP_URL
+    }
+  });
 });
 
 app.post("/api/sheets/update", async (req, res) => {
