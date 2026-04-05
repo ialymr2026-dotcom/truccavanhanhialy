@@ -640,7 +640,6 @@ export async function generateSwapBlob(swapData: any, config: any, signaturesOve
     + '<w:name w:val="Normal"/>'
     + '</w:style>'
     + '</w:styles>';
-
   const zip = new JSZip();
   zip.file('[Content_Types].xml', CT);
   zip.file('_rels/.rels', RELS);
