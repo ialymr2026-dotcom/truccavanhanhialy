@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 import fs from "fs";
 import admin from "firebase-admin";
-import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf-8"));
 
 dotenv.config();
 
@@ -67,10 +67,11 @@ app.use(express.json());
 app.use(cookieParser());
 
 const getOAuth2Client = () => {
+  const appUrl = (process.env.APP_URL || 'http://localhost:3000').trim().replace(/\/$/, "");
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID?.trim(),
     process.env.GOOGLE_CLIENT_SECRET?.trim(),
-    `${process.env.APP_URL || 'http://localhost:3000'}/api/auth/google/callback`
+    `${appUrl}/api/auth/google/callback`
   );
 };
 
@@ -344,6 +345,11 @@ app.post("/api/sheets/update", async (req, res) => {
   }
 });
 
+// Catch-all for API routes that don't exist
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API route ${req.path} not found` });
+});
+
 function getColumnLetter(columnIdx: number): string {
   let temp, letter = "";
   while (columnIdx >= 0) {
@@ -361,15 +367,7 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
 
-  if (process.env.NODE_ENV !== "production") {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
