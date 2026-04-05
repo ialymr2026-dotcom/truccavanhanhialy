@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "GoogleAuth": {
+      "title": "Google Auth Tokens",
+      "description": "Stores OAuth2 tokens for Google Sheets access",
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "object",
+          "description": "The JSON tokens object from Google"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["tokens", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/config/google_auth": {
+      "schema": "GoogleAuth",
+      "description": "The single document storing the shared Google authentication"
+    }
+  }
+}
