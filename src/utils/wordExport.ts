@@ -18,8 +18,7 @@ function rpr(o: any = {}) {
 
 function wrun(text: string, opts: any = {}) {
   return '<w:r>' + rpr(opts) + '<w:t xml:space="preserve">' + xe(text) + '</w:t></w:r>';
-}
-
+} 
 function wpara(content: string, o: any = {}) {
   const align = o.align || 'left';
   const spB = o.spBefore || 0, spA = o.spAfter || 0;
@@ -97,14 +96,17 @@ function twoCol(lc: string, rc: string, CW: number) {
   ])], [HW, CW - HW]);
 }
 
-function buildDateStr(val: string) {
+function buildDateStr(val: any) {
   if (val) {
-    const nd = new Date(val + 'T00:00:00');
+    const nd = (typeof val === 'string') ? new Date(val + (val.includes('T') ? '' : 'T00:00:00')) : val;
+    if (isNaN(nd.getTime())) return 'Gia Lai, ngày      tháng      năm     ';
     return 'Gia Lai, ngày ' + nd.getDate() + ' tháng ' + (nd.getMonth() + 1) + ' năm ' + nd.getFullYear();
   }
   return 'Gia Lai, ngày      tháng      năm     ';
 }
-
+function isOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+  return !(new Date(aEnd) < new Date(bStart) || new Date(bEnd) < new Date(aStart));
+}
 export function buildDocXml(currentResult: any, config: any) {
   const d = currentResult;
   const soVanBan = config.soVanBan || '';
@@ -118,7 +120,73 @@ export function buildDocXml(currentResult: any, config: any) {
 
   const allResults = d.allResults;
   const extraRows = d.extraRows || [];
+// Gom theo chức danh
+const roleGroups: Record<string, any[]> = {};
 
+allResults.forEach((res: any) => {
+  const role = res.chucDanh || d.chucDanh || '';
+  if (!roleGroups[role]) roleGroups[role] = [];
+  roleGroups[role].push(res);
+});
+
+// Tìm role có >= 2 người nghỉ trùng thời gian
+const validRoles: string[] = [];
+
+Object.keys(roleGroups).forEach(role => {
+  const list = roleGroups[role];
+
+  let hasOverlap = false;
+
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      if (isOverlap(list[i].start, list[i].end, list[j].start, list[j].end)) {
+        hasOverlap = true;
+        break;
+      }
+    }
+    if (hasOverlap) break;
+  }
+
+  if (hasOverlap) validRoles.push(role);
+});
+const extraNotesByRole: Record<string, Set<string>> = {};
+
+// init
+validRoles.forEach(role => {
+  extraNotesByRole[role] = new Set();
+});
+
+// lấy từ ketQua
+allResults.forEach((res: any) => {
+  const role = res.chucDanh || d.chucDanh || '';
+  if (!validRoles.includes(role)) return;
+
+  res.ketQua.forEach((it: any) => {
+    if (it.isSwap || it.relievedTen) {
+      const dateStr = it.ca + '-' + fmtVN(it.ngay).slice(0, 5);
+      const relieved = it.relievedTen || it.swapAbsentTen || res.ten;
+
+      extraNotesByRole[role].add(
+        `${abbrev(it.nguoiThay)} trực thay ${abbrev(relieved)} ca ${dateStr}`
+      );
+    }
+  });
+});
+
+// lấy từ extraRows
+extraRows.forEach((ex: any) => {
+  if (!ex.isSwap) return;
+
+  const role = ex.chucDanh;
+  if (!validRoles.includes(role)) return;
+
+  const dateStr = ex.ca + '-' + fmtVN(ex.ngay).slice(0, 5);
+  const relieved = ex.relievedTen || ex.absentTen;
+
+  extraNotesByRole[role].add(
+    `${abbrev(ex.nguoiThay)} trực thay ${abbrev(relieved)} ca ${dateStr}`
+  );
+});
   const swapRows = extraRows.filter((r: any) => r.isSwap);
   const chainRows = extraRows.filter((r: any) => r.isCKChain && !r.isSwap);
 
@@ -126,12 +194,12 @@ export function buildDocXml(currentResult: any, config: any) {
     wpara(wrun('CÔNG TY THỦY ĐIỆN IALY', { size: 22 }), { align: 'center', spAfter: 40 })
     + wpara(wrun('PHÂN XƯỞNG VẬN HÀNH IALY', { bold: true, size: 22, underline: true }), { align: 'center' }),
     wpara(wrun('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { bold: true, size: 20 }), { align: 'center', spAfter: 40 })
-    + wpara(wrun('Độc lập - Tự do - Hạnh phúc', { italic: true, size: 22, underline: true }), { align: 'center' }),
+    + wpara(wrun('Độc lập - Tự do - Hạnh phúc', { bold: true, size: 24, underline: true }), { align: 'center' }),
     CW
   );
   const soNgayTbl = twoCol(
-    wpara(wrun('Số: ' + (soVanBan || '      ') + '/VHIALY', { size: 22 }), { align: 'center', spBefore: 40, spAfter: 40 }),
-    wpara(wrun(buildDateStr(ngayKyVal), { italic: true, size: 22 }), { align: 'center' }),
+    wpara(wrun('Số: ' + (soVanBan || '      ') + '/VHIALY', { size: 24 }), { align: 'center', spBefore: 40, spAfter: 40 }),
+    wpara(wrun(buildDateStr(ngayKyVal), { italic: true, size: 24 }), { align: 'center' }),
     CW
   );
   const title = wpara(wrun('LỊCH TRỰC THAY CA VẬN HÀNH', { bold: true, size: 28 }),
@@ -139,8 +207,9 @@ export function buildDocXml(currentResult: any, config: any) {
 
   function buildPersonRows(res: any) {
     const rows = res.ketQua.slice();
+    const resCD = res.chucDanh || d.chucDanh || '';
     chainRows.forEach((ex: any) => {
-      if (ex.absentKip === res.kip) rows.push(ex);
+      if (ex.absentKip === res.kip && ex.chucDanh === resCD) rows.push(ex);
     });
     rows.sort((a: any, b: any) => {
       if (a.ngay < b.ngay) return -1; if (a.ngay > b.ngay) return 1;
@@ -161,43 +230,89 @@ export function buildDocXml(currentResult: any, config: any) {
 
   const tableRows = [];
   tableRows.push(wtr([
-    wtc({ w: c0, shading: GRAY, content: wpara(wrun('Tên người cần được\ntrực thay', { bold: true, size: 22 }), { align: 'center' }) }),
-    wtc({ w: c1, shading: GRAY, content: wpara(wrun('Chức danh\nhiện tại', { bold: true, size: 22 }), { align: 'center' }) }),
-    wtc({ w: CW - c0 - c1, gridSpan: nCols, shading: GRAY, content: wpara(wrun('Tên người trực thay', { bold: true, size: 22 }), { align: 'center' }) })
+    wtc({ w: c0, shading: GRAY, content: wpara(wrun('Tên người cần được\ntrực thay', { bold: true, size: 24 }), { align: 'center' }) }),
+    wtc({ w: c1, shading: GRAY, content: wpara(wrun('Chức danh\nhiện tại', { bold: true, size: 24 }), { align: 'center' }) }),
+    wtc({ w: CW - c0 - c1, gridSpan: nCols, shading: GRAY, content: wpara(wrun('Tên người trực thay', { bold: true, size: 24 }), { align: 'center' }) })
   ]));
 
   allResults.forEach((res: any) => {
+    // Collect notes for this person (Swaps/Conflicts) FIRST
+    const personNotes: string[] = [];
+    const resCD = res.chucDanh || d.chucDanh || '';
+
+    res.ketQua.forEach((it: any) => {
+      if (it.conflictNote && (it.conflictNote.includes('Đổi ca') || it.conflictNote.includes('Hoán đổi') || it.relievedTen)) {
+        const dateStr = it.ca + '-' + fmtVN(it.ngay).slice(0, 5);
+        const relieved = it.relievedTen || it.swapAbsentTen || res.ten;
+        personNotes.push(`${abbrev(it.nguoiThay)} trực thay ${abbrev(relieved)} ca ${dateStr}.`);
+      }
+    });
+    extraRows.forEach((ex: any) => {
+      if (ex.isSwap && ex.absentKip === res.kip && ex.chucDanh === resCD) {
+        const dateStr = ex.ca + '-' + fmtVN(ex.ngay).slice(0, 5);
+        const relieved = ex.relievedTen || ex.absentTen;
+        personNotes.push(`${abbrev(ex.nguoiThay)} trực thay ${abbrev(relieved)} ca ${dateStr}.`);
+      }
+    });
+
     const rows = buildPersonRows(res);
     let groups = [];
     for (let i = 0; i < rows.length; i += nCols) groups.push(rows.slice(i, i + nCols));
     if (!groups.length) groups = [[]];
 
-    const nghiStr = '(nghỉ phép từ\n' + fmtVN(res.start) + ' đến\n' + fmtVN(res.end) + ')';
-    const chucDanh = res.chucDanh || d.chucDanh || '';
+    const nghiStr = '(nghỉ phép từ ' + fmtVN(res.start) + ' đến ' + fmtVN(res.end) + ')';
 
     groups.forEach((grp, gi) => {
       const isFirst = (gi === 0);
+      const isLast = (gi === groups.length - 1);
       const caRow = [];
       if (isFirst) {
         caRow.push(wtc({
           w: c0, vMerge: 'restart',
-          content: wpara(wrun(res.ten, { size: 22 }), { align: 'center', spAfter: 20 })
+          content: wpara(wrun(res.ten, { size: 24 }), { align: 'center', spAfter: 20 })
             + wpara(wrun(nghiStr, { italic: true, size: 20 }), { align: 'center' })
         }));
         caRow.push(wtc({
           w: c1, vMerge: 'restart',
-          content: wpara(wrun(chucDanh, { size: 22 }), { align: 'center' })
+          content: wpara(wrun(resCD, { size: 24 }), { align: 'center' })
         }));
       } else {
         caRow.push(wtc({ w: c0, vMerge: 'cont', content: emptyP() }));
         caRow.push(wtc({ w: c1, vMerge: 'cont', content: emptyP() }));
       }
-      for (let i = 0; i < nCols; i++) {
+
+      // Add shifts in this group
+      for (let i = 0; i < grp.length; i++) {
         const it = grp[i];
         caRow.push(wtc({
           w: colW[i + 2], shading: it ? GRAY : '',
-          content: wpara(wrun(it ? it.ca + '-' + fmtVN(it.ngay).slice(0, 5) : '', { bold: true, size: 22 }), { align: 'center' })
+          content: wpara(wrun(it ? it.ca + '-' + fmtVN(it.ngay).slice(0, 5) : '', { bold: true, size: 24 }), { align: 'center' })
         }));
+      }
+
+      let noteIncludedInThisRow = false;
+      const uniqueNotes = Array.from(new Set(personNotes)) as string[];
+
+      if (isLast && grp.length < nCols) {
+        const remainingCols = nCols - grp.length;
+        const remainingW = colW.slice(grp.length + 2).reduce((a, b) => a + b, 0);
+        
+        // Gộp các ô trống: Nếu còn trống > 1 ô và có ghi chú, chèn ghi chú vào đó.
+        // Nếu chỉ còn trống 1 ô, ta sẽ để trống ô đó và đẩy ghi chú xuống hàng riêng biệt bên dưới.
+        if (uniqueNotes.length > 0 && remainingCols > 1) {
+          let noteContent = '';
+          uniqueNotes.forEach(line => {
+            noteContent += wpara(wrun(line, { size: 24 }), { spBefore: 40, spAfter: 40 });
+          });
+          caRow.push(wtc({
+            w: remainingW, gridSpan: remainingCols, vMerge: 'restart',
+            content: noteContent
+          }));
+          noteIncludedInThisRow = true;
+        } else {
+          // Gộp các ô trống còn lại làm một (merge) để bảng sạch sẽ hơn
+          caRow.push(wtc({ w: remainingW, gridSpan: remainingCols, content: emptyP() }));
+        }
       }
       tableRows.push(wtr(caRow));
 
@@ -205,50 +320,76 @@ export function buildDocXml(currentResult: any, config: any) {
         wtc({ w: c0, vMerge: 'cont', content: emptyP() }),
         wtc({ w: c1, vMerge: 'cont', content: emptyP() })
       ];
-      for (let i = 0; i < nCols; i++) {
+      for (let i = 0; i < grp.length; i++) {
         const it = grp[i];
         tenRow.push(wtc({
           w: colW[i + 2],
           content: it ? wpara(wrun(abbrev(it.nguoiThay), { size: 22 }), { align: 'center' }) : emptyP()
         }));
       }
-      tableRows.push(wtr(tenRow));
-    });
-  });
 
-  const swapNotes: string[] = [];
-  allResults.forEach((res: any) => {
-    res.ketQua.forEach((it: any) => {
-      if (it.conflictNote && it.conflictNote.includes('Hoán đổi')) {
-        const dateStr = it.ca + '/' + fmtVN(it.ngay).slice(0, 5);
-        swapNotes.push(`${abbrev(it.nguoiThay)} trực thay ${abbrev(res.ten)} ca ${dateStr}`);
+      if (noteIncludedInThisRow) {
+        const remainingCols = nCols - grp.length;
+        const remainingW = colW.slice(grp.length + 2).reduce((a, b) => a + b, 0);
+        tenRow.push(wtc({ w: remainingW, gridSpan: remainingCols, vMerge: 'cont', content: emptyP() }));
+      } else if (isLast && grp.length < nCols) {
+        const remainingCols = nCols - grp.length;
+        const remainingW = colW.slice(grp.length + 2).reduce((a, b) => a + b, 0);
+        tenRow.push(wtc({ w: remainingW, gridSpan: remainingCols, content: emptyP() }));
+      }
+      tableRows.push(wtr(tenRow));
+
+      // Nếu có ghi chú nhưng chưa được chèn (do hàng đầy hoặc chỉ còn 1 ô trống),
+      // hoặc nếu chỉ còn trống đúng 1 ô (theo yêu cầu: tự động thêm 1 hàng riêng biệt bên dưới)
+      const remainingCount = nCols - grp.length;
+      const shouldAddSeparateRow = (isLast && !noteIncludedInThisRow && uniqueNotes.length > 0) || (isLast && remainingCount === 1);
+
+      if (shouldAddSeparateRow) {
+        let noteContent = '';
+        if (uniqueNotes.length > 0) {
+          uniqueNotes.forEach(line => {
+            noteContent += wpara(wrun(line, { size: 24 }), { spBefore: 40, spAfter: 40 });
+          });
+        } else {
+          noteContent = emptyP(40, 40); // Hàng trống nếu không có ghi chú nhưng còn trống 1 ô
+        }
+        tableRows.push(wtr([
+          wtc({ w: c0, vMerge: 'cont', content: emptyP() }),
+          wtc({ w: c1, vMerge: 'cont', content: emptyP() }),
+          wtc({ w: CW - c0 - c1, gridSpan: nCols, content: noteContent })
+        ]));
       }
     });
   });
 
-  extraRows.forEach((ex: any) => {
-    if (ex.isSwap) {
-      const dateStr = ex.ca + '/' + fmtVN(ex.ngay).slice(0, 5);
-      swapNotes.push(`${abbrev(ex.nguoiThay)} trực thay ${abbrev(ex.absentTen)} ca ${dateStr}`);
-    }
-  });
-
-  if (swapNotes.length > 0) {
-    const cdLabel = d.chucDanh || config.chucDanh || 'Trưởng ca';
-    let noteContent = wpara(wrun('Tại ' + cdLabel + ' :', { bold: true, size: 22 }), { spBefore: 40, spAfter: 10 });
-    swapNotes.forEach(line => {
-      noteContent += wpara(wrun('- ' + line, { size: 22 }), { indent: { left: 360 }, spAfter: 10 });
-    });
-    tableRows.push(wtr([
-      wtc({ w: CW, gridSpan: nCols + 2, borders: false, content: noteContent })
-    ]));
-  }
-
   const mainTbl = wtable(tableRows, colW);
+let extraNoteBlock = '';
 
+validRoles.forEach(role => {
+  const notes = Array.from(extraNotesByRole[role] || []);
+
+  extraNoteBlock += wpara(
+    wrun(`Tại ${role} :`, { bold: true, size: 24 }),
+    { spBefore: 100 }
+  );
+
+  if (notes.length > 0) {
+    notes.forEach(n => {
+      extraNoteBlock += wpara(
+        wrun(`- ${n}`, { size: 24 }),
+        { indent: { left: 400 } }
+      );
+    });
+  } else {
+    extraNoteBlock += wpara(
+      wrun(`-`, { size: 24 }),
+      { indent: { left: 400 } }
+    );
+  }
+});
   const note = wpara(
-    wrun('Ghi chú: Các chức danh kiểm tra lại lịch trực của mình, nếu có gì vướng mắc phải báo lại PX để kiểm tra và điều chỉnh kịp thời./.',
-      { italic: true, size: 20 }),
+    wrun('   Ghi chú: Các chức danh kiểm tra lại lịch trực của mình, nếu có gì vướng mắc phải báo lại PX để   kiểm tra và điều chỉnh kịp thời./.',
+      { italic: true, size: 24 }),
     { spBefore: 120, spAfter: 60 }
   );
 
@@ -256,15 +397,15 @@ export function buildDocXml(currentResult: any, config: any) {
     wtr([
       wtc({
         w: HW, borders: false, content:
-          wpara(wrun('Nơi nhận:', { bold: true, italic: true, size: 22 }), { spBefore: 80 })
+          wpara(wrun('Nơi nhận:', { bold: true, italic: true, size: 24 }), { spBefore: 80 })
           + wpara(wrun('- Các kíp (để t/hiện)', { italic: true, size: 22 }))
           + wpara(wrun('- Lưu: VHIALY', { italic: true, size: 22 }))
       }),
       wtc({
         w: CW - HW, borders: false, content:
-          wpara(wrun('QUẢN ĐỐC', { bold: true, size: 22 }), { align: 'center', spBefore: 80 })
-          + emptyP(500, 0) + emptyP(500, 0) + emptyP(500, 0)
-          + wpara(wrun(nguoiKy, { bold: true, size: 22 }), { align: 'center' })
+          wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
+          + emptyP(500, 0) + emptyP(500, 0) 
+          + wpara(wrun(nguoiKy, { bold: true, size: 24 }), { align: 'center' })
       })
     ])
   ], [HW, CW - HW]);
@@ -272,7 +413,7 @@ export function buildDocXml(currentResult: any, config: any) {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
     + '<w:body>'
-    + hdrTbl + soNgayTbl + title + mainTbl + note + footTbl
+    + hdrTbl + soNgayTbl + title + mainTbl + extraNoteBlock + note + footTbl
     + '<w:sectPr>'
     + '<w:pgSz w:w="11906" w:h="16838"/>'
     + '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>'
@@ -280,8 +421,8 @@ export function buildDocXml(currentResult: any, config: any) {
     + '</w:body></w:document>';
 }
 
-export async function exportWord(currentResult: any, config: any) {
-  if (!currentResult) return;
+export async function generateWordBlob(currentResult: any, config: any) {
+  if (!currentResult) return null;
   
   const docXml = buildDocXml(currentResult, config);
 
@@ -321,11 +462,163 @@ export async function exportWord(currentResult: any, config: any) {
   zip.file('word/styles.xml', STYLES);
   zip.file('word/document.xml', docXml);
 
-  const blob = await zip.generateAsync({
+  return await zip.generateAsync({
     type: 'blob',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     compression: 'DEFLATE'
   });
+}
+
+export function buildSwapDocXml(swapData: any, config: any) {
+  const { date1, date2, person1, person2, shift1, shift2 } = swapData;
+  const nguoiKy = config.nguoiKy || 'Nguyễn Văn Nghị';
+  const ngayKyVal = config.ngayKy || '';
+  const CW = 9360, HW = Math.floor(CW / 2);
+
+  const hdrTbl = twoCol(
+    wpara(wrun('CÔNG TY THỦY ĐIỆN IALY', { size: 22 }), { align: 'center', spAfter: 40 })
+    + wpara(wrun('PHÂN XƯỞNG VẬN HÀNH IALY', { bold: true, size: 22, underline: true }), { align: 'center' }),
+    wpara(wrun('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { bold: true, size: 20 }), { align: 'center', spAfter: 40 })
+    + wpara(wrun('Độc lập - Tự do - Hạnh phúc', { bold: true, size: 24, underline: true }), { align: 'center' }),
+    CW
+  );
+
+  const soNgayTbl = twoCol(
+    wpara(wrun('Số:        /VHIALY', { size: 24 }), { align: 'center', spBefore: 40, spAfter: 40 }),
+    wpara(wrun(buildDateStr(ngayKyVal), { italic: true, size: 24 }), { align: 'center' }),
+    CW
+  );
+
+  const title = wpara(wrun('LỊCH ĐỔI CA', { bold: true, size: 28 }),
+    { align: 'center', spBefore: 120, spAfter: 120 });
+
+  const d1 = new Date(date1 + 'T00:00:00');
+  const d2 = new Date(date2 + 'T00:00:00');
+  const df1 = fmtVN(d1);
+  const df2 = fmtVN(d2);
+
+  let timeStr = '';
+  if (date1 === date2) {
+    timeStr = `Ngày ${df1}.`;
+  } else {
+    const sortedDates = [d1, d2].sort((a, b) => a.getTime() - b.getTime());
+    timeStr = `Ngày ${fmtVN(sortedDates[0])} và ngày ${fmtVN(sortedDates[1])}.`;
+  }
+
+  const content = [
+    wpara(wrun(`- Thời gian: ${timeStr}`, { size: 26 }), { spBefore: 120, indent: { left: 720 } }),
+    wpara(wrun(`- Lịch đổi ca như sau:`, { size: 26 }), { spBefore: 60, indent: { left: 720 } }),
+    wpara(wrun(`+ ${person1} nghỉ ca ${shift1} ${df1}, đi ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }),
+    wpara(wrun(`+ ${person2} đi ca ${shift1} ${df1}, nghỉ ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }),
+    wpara(wrun(`Các chức danh kiểm tra lại lịch trực của mình và tự chịu trách nhiệm trước Phân xưởng nếu không đi ca theo đúng lịch đã đổi./.`, { size: 26 }), { spBefore: 120, indent: { left: 720 } })
+  ].join('');
+
+  const footTbl = wtable([
+    wtr([
+      wtc({
+        w: 3000, borders: false, content:
+          wpara(wrun('Nơi nhận:', { bold: true, italic: true, size: 22 }), { spBefore: 80 })
+          + wpara(wrun('- LĐPX;', { size: 20 }))
+          + wpara(wrun('- Các cá nhân (để t/h);', { size: 20 }))
+          + wpara(wrun('- Lưu: VHIALY.', { size: 20 }))
+      }),
+      wtc({
+        w: 3180, borders: false, content:
+          wpara(wrun('NGƯỜI ĐỔI CA', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
+          + emptyP(1000, 0)
+          + wpara(wrun(person1, { bold: true, size: 24 }), { align: 'center' })
+      }),
+      wtc({
+        w: 3180, borders: false, content:
+          wpara(wrun('NGƯỜI ĐI CA THAY', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
+          + emptyP(1000, 0)
+          + wpara(wrun(person2, { bold: true, size: 24 }), { align: 'center' })
+      })
+    ]),
+    wtr([
+      wtc({ w: 3000, borders: false, content: emptyP() }),
+      wtc({
+        w: 3180, borders: false, content:
+          wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 200 })
+          + emptyP(1000, 0)
+          + wpara(wrun(nguoiKy, { bold: true, size: 24 }), { align: 'center' })
+      }),
+      wtc({ w: 3180, borders: false, content: emptyP() })
+    ])
+  ], [3000, 3180, 3180]);
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    + '<w:body>'
+    + hdrTbl + soNgayTbl + title + content + footTbl
+    + '<w:sectPr>'
+    + '<w:pgSz w:w="11906" w:h="16838"/>'
+    + '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>'
+    + '</w:sectPr>'
+    + '</w:body></w:document>';
+}
+
+export async function generateSwapBlob(swapData: any, config: any) {
+  const docXml = buildSwapDocXml(swapData, config);
+
+  const CT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+    + '</Types>';
+
+  const RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+    + '</Relationships>';
+
+  const WRELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    + '</Relationships>';
+
+  const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    + '<w:docDefaults><w:rPrDefault><w:rPr>'
+    + '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>'
+    + '<w:sz w:val="24"/><w:szCs w:val="24"/>'
+    + '</w:rPr></w:rPrDefault></w:docDefaults>'
+    + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
+    + '<w:name w:val="Normal"/>'
+    + '</w:style>'
+    + '</w:styles>';
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', CT);
+  zip.file('_rels/.rels', RELS);
+  zip.file('word/_rels/document.xml.rels', WRELS);
+  zip.file('word/styles.xml', STYLES);
+  zip.file('word/document.xml', docXml);
+
+  return await zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    compression: 'DEFLATE'
+  });
+}
+
+export async function exportSwapDoc(swapData: any, config: any) {
+  const blob = await generateSwapBlob(swapData, config);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Lich_doi_ca_${swapData.person1.replace(/\s+/g, '_')}_${swapData.person2.replace(/\s+/g, '_')}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function exportWord(currentResult: any, config: any) {
+  const blob = await generateWordBlob(currentResult, config);
+  if (!blob) return;
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
