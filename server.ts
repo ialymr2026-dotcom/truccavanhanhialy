@@ -1,5 +1,5 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+// import { createServer as createViteServer } from "vite"; // Move to dynamic import
 import path from "path";
 import { google } from "googleapis";
 import cookieParser from "cookie-parser";
@@ -7,46 +7,50 @@ import dotenv from "dotenv";
 
 import fs from "fs";
 import admin from "firebase-admin";
+dotenv.config();
+
 let firebaseConfig: any = {};
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(configPath)) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   } else {
-    console.warn("firebase-applet-config.json not found, using environment variables if available");
+    console.warn("firebase-applet-config.json not found, using environment variables");
     firebaseConfig = {
-      projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT,
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "default-project",
     };
   }
 } catch (e) {
   console.error("Error loading firebase-applet-config.json:", e);
+  firebaseConfig = { projectId: process.env.FIREBASE_PROJECT_ID || "default-project" };
 }
-
-dotenv.config();
 
 // Initialize Firebase Admin
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+if (admin.apps.length === 0) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: firebaseConfig.projectId,
-    });
-    console.log("Firebase Admin initialized with Service Account from ENV");
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id || firebaseConfig.projectId,
+      });
+      console.log("Firebase Admin initialized with Service Account from ENV");
+    } else {
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+      console.log("Firebase Admin initialized with default credentials");
+    }
   } catch (e) {
-    console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
-    admin.initializeApp({ projectId: firebaseConfig.projectId });
+    console.error("Firebase Admin initialization error:", e);
   }
-} else {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
-  console.log("Firebase Admin initialized with default credentials");
 }
-const firestore = admin.firestore();
+// const firestore = admin.firestore(); // Initialize lazily
+const getFirestore = () => admin.firestore();
 
 const saveTokens = async (tokens: any) => {
   try {
+    const firestore = getFirestore();
     await firestore.collection("config").doc("google_auth").set({
       tokens,
       updatedAt: new Date().toISOString()
@@ -59,6 +63,7 @@ const saveTokens = async (tokens: any) => {
 
 const loadTokens = async () => {
   try {
+    const firestore = getFirestore();
     const doc = await firestore.collection("config").doc("google_auth").get();
     if (doc.exists) {
       return doc.data()?.tokens || null;
@@ -81,9 +86,16 @@ app.use(cookieParser());
 
 const getOAuth2Client = () => {
   const appUrl = (process.env.APP_URL || 'http://localhost:3000').trim().replace(/\/$/, "");
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables");
+  }
+
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID?.trim(),
-    process.env.GOOGLE_CLIENT_SECRET?.trim(),
+    clientId,
+    clientSecret,
     `${appUrl}/api/auth/google/callback`
   );
 };
@@ -383,6 +395,8 @@ function getColumnLetter(columnIdx: number): string {
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
