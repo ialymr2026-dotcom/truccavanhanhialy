@@ -36,10 +36,10 @@ export default function SignatureManager({ staffList, signatures, onSignaturesCh
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-        <span className="text-blue-600">✍️</span> Quản lý chữ ký (65+ người)
+        <span className="text-blue-600">✍️</span> Quản lý chữ ký 
       </h3>
       <p className="text-sm text-gray-500 mb-4 italic">
-        * Tải lên ảnh chữ ký cho từng người. Ảnh sẽ được lưu vĩnh viễn trên hệ thống.
+        * Tải lên ảnh chữ ký cho từng người. 
       </p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-2">
