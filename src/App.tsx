@@ -5,6 +5,7 @@ import { fmtVN, fmtIn, dayN, timNghi, timThay, abbrev, xacDinhCa } from './utils
 import { buildMultiLeaveResults, Leave, ResultItem } from './utils/multiLeaveAlgorithm';
 import { exportWord, generateWordBlob, exportSwapDoc, generateSwapBlob } from './utils/wordExport';
 import { renderAsync } from 'docx-preview';
+import SignatureManager from './components/SignatureManager';
 
 export default function App() {
   const [staffData, setStaffData] = useState<string[][]>(() => {
@@ -44,6 +45,9 @@ export default function App() {
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [isUpdatingSheets, setIsUpdatingSheets] = useState(false);
+  const [signatures, setSignatures] = useState<Record<string, string>>({});
+  const [showSignatureManager, setShowSignatureManager] = useState(false);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
   // Manual Swap State
   const [swapData, setSwapData] = useState({
@@ -79,8 +83,56 @@ export default function App() {
       }
     };
     window.addEventListener('message', handleMessage);
+
+    // Fetch cloud settings on mount
+    const fetchSettings = async () => {
+      try {
+        // Fetch app settings
+        const res = await fetch('/api/app-settings');
+        const data = await res.json();
+        if (data.staffData) {
+          setStaffData(data.staffData);
+          localStorage.setItem('sd', JSON.stringify(data.staffData));
+        }
+        if (data.config) {
+          setConfig(data.config);
+        }
+
+        // Fetch signatures
+        const sigRes = await fetch('/api/signatures');
+        const sigData = await sigRes.json();
+        setSignatures(sigData);
+
+        setIsSettingsLoaded(true);
+      } catch (e) {
+        console.error("Failed to fetch app settings", e);
+        setIsSettingsLoaded(true);
+      }
+    };
+    fetchSettings();
+
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  // Save settings to cloud whenever they change (debounced)
+  useEffect(() => {
+    if (!isSettingsLoaded) return;
+    
+    const saveSettings = async () => {
+      try {
+        await fetch('/api/app-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffData, config })
+        });
+      } catch (e) {
+        console.error("Failed to save app settings", e);
+      }
+    };
+    
+    const timer = setTimeout(saveSettings, 3000);
+    return () => clearTimeout(timer);
+  }, [staffData, config, isSettingsLoaded]);
 
   const handleConnectGoogle = () => {
     const width = 500, height = 600;
@@ -479,7 +531,7 @@ export default function App() {
 
   const handlePreviewSwap = async () => {
     setIsProcessing(true);
-    const blob = await generateSwapBlob(swapData, config);
+    const blob = await generateSwapBlob(swapData, config, signatures);
     if (blob) {
       setPreviewBlob(blob);
       setIsPreviewingSwap(true);
@@ -540,7 +592,7 @@ export default function App() {
 
   const handleExportSwap = async () => {
     setIsProcessing(true);
-    await exportSwapDoc(swapData, config);
+    await exportSwapDoc(swapData, config, signatures);
     if (isGoogleAuth) {
       await updateSwapGoogleSheets();
     }
@@ -743,11 +795,27 @@ export default function App() {
       <div className="card">
         <div className="ctitle">
           Nhân sự của kíp 
-          <button className="staff-toggle" onClick={() => setShowStaff(!showStaff)}>
-            {showStaff ? 'Thu gọn ▲' : 'Chỉnh sửa ▼'}
-          </button>
+          <div className="flex gap-2">
+            <button className="staff-toggle" onClick={() => setShowStaff(!showStaff)}>
+              {showStaff ? 'Thu gọn ▲' : 'Chỉnh sửa ▼'}
+            </button>
+            <button className="staff-toggle" onClick={() => setShowSignatureManager(!showSignatureManager)}>
+              {showSignatureManager ? '✍️ Ẩn chữ ký' : '✍️ Quản lý chữ ký'}
+            </button>
+          </div>
         </div>
-        <p className="text-[13px] text-var(--txt2)">Nhấn "Chỉnh sửa" để cập nhật tên nhân viên trong từng kíp.</p>
+        <p className="text-[13px] text-var(--txt2)">Nhấn "Chỉnh sửa" để cập nhật tên nhân viên hoặc "Quản lý chữ ký" để tải lên ảnh chữ ký.</p>
+        
+        {showSignatureManager && (
+          <div className="mb-6">
+            <SignatureManager 
+              staffList={Array.from(new Set(staffData.flatMap(row => row.slice(1)).filter(Boolean)))} 
+              signatures={signatures}
+              onSignaturesChange={setSignatures} 
+            />
+          </div>
+        )}
+
         {showStaff && (
           <div className="staff-wrap">
             <table className="st">
