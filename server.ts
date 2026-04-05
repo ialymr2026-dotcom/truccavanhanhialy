@@ -12,12 +12,25 @@ import firebaseConfig from "./firebase-applet-config.json" with { type: "json" }
 dotenv.config();
 
 // Initialize Firebase Admin
-admin.initializeApp({
-  projectId: firebaseConfig.projectId,
-});
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: firebaseConfig.projectId,
+    });
+    console.log("Firebase Admin initialized with Service Account from ENV");
+  } catch (e) {
+    console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
+    admin.initializeApp({ projectId: firebaseConfig.projectId });
+  }
+} else {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+  console.log("Firebase Admin initialized with default credentials");
+}
 const firestore = admin.firestore();
-// Note: If using a named database, you might need to use getFirestore(databaseId)
-// from firebase-admin/firestore, but for now we use the default.
 
 const saveTokens = async (tokens: any) => {
   try {
@@ -356,9 +369,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
