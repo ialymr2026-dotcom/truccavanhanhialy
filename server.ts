@@ -46,7 +46,21 @@ if (admin.apps.length === 0) {
   }
 }
 // const firestore = admin.firestore(); // Initialize lazily
-const getFirestore = () => admin.firestore();
+const getFirestore = () => {
+  try {
+    // Priority: 1. Environment variable 2. Config file 3. Default
+    const dbId = process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
+    
+    if (dbId && dbId !== "(default)") {
+      console.log(`Using Firestore database: ${dbId}`);
+      return admin.firestore(dbId);
+    }
+    return admin.firestore();
+  } catch (e) {
+    console.error("Error getting Firestore instance, falling back to default:", e);
+    return admin.firestore();
+  }
+};
 
 const saveTokens = async (newTokens: any) => {
   try {
@@ -143,7 +157,7 @@ app.get("/api/auth/google", (req, res) => {
     const url = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email"],
-      // prompt: "consent" // Only use consent if we really need a new refresh token
+      prompt: "consent" // Force consent to ensure we get a refresh_token
     });
     res.redirect(url);
   } catch (error) {
