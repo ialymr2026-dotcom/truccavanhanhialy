@@ -42,6 +42,7 @@ export default function App() {
   });
 
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [isUpdatingSheets, setIsUpdatingSheets] = useState(false);
 
   // Manual Swap State
@@ -58,12 +59,15 @@ export default function App() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      setLoadingAuth(true);
       try {
         const res = await fetch('/api/auth/status');
         const data = await res.json();
         setIsGoogleAuth(data.authenticated);
       } catch (e) {
         console.error("Auth check failed", e);
+      } finally {
+        setLoadingAuth(false);
       }
     };
     checkAuth();
@@ -871,7 +875,11 @@ export default function App() {
                 <button className="btn-ex btn-word" onClick={handleExportWord} disabled={isProcessing}>
                   {isProcessing ? <span className="spin spinw mr-2"></span> : '📝'} Xuất Word
                 </button>
-                {!isGoogleAuth ? (
+                {loadingAuth ? (
+                  <button className="btn-ex bg-gray-200 text-gray-500 cursor-wait" disabled>
+                    <span className="spin mr-2 border-gray-400"></span> Đang kiểm tra...
+                  </button>
+                ) : !isGoogleAuth ? (
                   <button className="btn-ex bg-[#4285F4] text-white hover:bg-[#357ae8]" onClick={handleConnectGoogle}>
                     🔗 Kết nối Google Sheets
                   </button>
