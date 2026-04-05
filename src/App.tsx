@@ -858,8 +858,8 @@ export default function App() {
       </div>
 
       <div className="card">
-        <div className="ctitle">Tạo lịch đổi ca thủ công</div>
-        <p className="text-[13px] text-var(--txt2) mb-4">Sử dụng chức năng này để tạo nhanh văn bản "Lịch đổi ca" giữa 2 nhân viên.</p>
+        <div className="ctitle">Tạo lịch đổi ca </div>
+        <p className="text-[13px] text-var(--txt2) mb-4"> Tạo nhanh văn bản "Lịch đổi ca" giữa 2 người.</p>
         <div className="g2">
           <div className="field">
             <label>Chức danh</label>
