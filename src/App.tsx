@@ -502,11 +502,13 @@ export default function App() {
         updateMap[`${p1}|${swapData.date1}`] = swapData.shift2;
         updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
       } else {
-        // Different day swap
-        updateMap[`${p1}|${swapData.date1}`] = 'O';
-        updateMap[`${p1}|${swapData.date2}`] = swapData.shift2;
-        updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
-        updateMap[`${p2}|${swapData.date2}`] = 'O';
+        // Different day swap: 
+        // P1 works P2's shift on Date 1, and is OFF on Date 2
+        updateMap[`${p1}|${swapData.date1}`] = swapData.shift2;
+        updateMap[`${p1}|${swapData.date2}`] = 'O';
+        // P2 is OFF on Date 1, and works P1's shift on Date 2
+        updateMap[`${p2}|${swapData.date1}`] = 'O';
+        updateMap[`${p2}|${swapData.date2}`] = swapData.shift1;
       }
 
       const updates = Object.entries(updateMap).map(([key, shift]) => {
