@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 
 import fs from "fs";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 dotenv.config();
 
 let firebaseConfig: any = {};
@@ -48,21 +49,23 @@ if (admin.apps.length === 0) {
 // const firestore = admin.firestore(); // Initialize lazily
 let lastFirestoreError: string | null = null;
 
-const getFirestore = (useDefault = false) => {
+const getFirestoreInstance = (useDefault = false) => {
   try {
+    const app = admin.app();
     if (useDefault) {
-      return admin.firestore();
+      return getFirestore(app);
     }
     
     const dbId = process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
     
     if (dbId && dbId !== "(default)") {
-      return admin.firestore(dbId);
+      // In firebase-admin, the signature is getFirestore(app, databaseId)
+      return getFirestore(app, dbId);
     }
-    return admin.firestore();
+    return getFirestore(app);
   } catch (e: any) {
     lastFirestoreError = `GetFirestore Error: ${e.message}`;
-    return admin.firestore();
+    return getFirestore(admin.app());
   }
 };
 
@@ -87,11 +90,12 @@ const saveTokens = async (newTokens: any) => {
 
   try {
     try {
-      await trySave(getFirestore());
+      await trySave(getFirestoreInstance());
       lastFirestoreError = null;
     } catch (e: any) {
-      if (e.code === 5 || e.message?.includes("NOT_FOUND")) {
-        await trySave(getFirestore(true));
+      console.warn("Primary DB save failed, trying fallback:", e.message);
+      if (e.code === 5 || e.message?.includes("NOT_FOUND") || e.message?.includes("not found")) {
+        await trySave(getFirestoreInstance(true));
         lastFirestoreError = null;
       } else {
         throw e;
@@ -113,21 +117,20 @@ const loadTokens = async () => {
   };
 
   try {
-    console.log("Attempting to load tokens from Firestore...");
     try {
-      const tokens = await tryLoad(getFirestore());
+      const tokens = await tryLoad(getFirestoreInstance());
       if (tokens) return tokens;
     } catch (e: any) {
-      if (e.code === 5 || e.message?.includes("NOT_FOUND")) {
-        console.warn("Named database not found, trying default database for load...");
-        const tokens = await tryLoad(getFirestore(true));
+      console.warn("Primary DB load failed, trying fallback:", e.message);
+      if (e.code === 5 || e.message?.includes("NOT_FOUND") || e.message?.includes("not found")) {
+        const tokens = await tryLoad(getFirestoreInstance(true));
         if (tokens) return tokens;
       } else {
         throw e;
       }
     }
-    console.log("No tokens document found in Firestore.");
-  } catch (e) {
+  } catch (e: any) {
+    lastFirestoreError = `Load Error: ${e.message}`;
     console.error("Error loading tokens from Firestore:", e);
   }
   return null;
@@ -172,19 +175,28 @@ app.get("/api/debug/auth", async (req, res) => {
 
 app.get("/api/debug/test-db", async (req, res) => {
   try {
-    const db = getFirestore();
+    const db = getFirestoreInstance();
     await db.collection("config").doc("test_connection").set({
       time: new Date().toISOString(),
       status: "ok"
     });
-    res.json({ success: true, message: "Ghi dữ liệu thành công!" });
+    res.json({ success: true, message: "Ghi dữ liệu thành công vào Database chính!" });
   } catch (e: any) {
-    res.status(500).json({ 
-      success: false, 
-      error: e.message,
-      code: e.code,
-      stack: e.stack?.split('\n').slice(0, 3)
-    });
+    try {
+      const dbFallback = getFirestoreInstance(true);
+      await dbFallback.collection("config").doc("test_connection").set({
+        time: new Date().toISOString(),
+        status: "ok_fallback"
+      });
+      res.json({ success: true, message: "Ghi dữ liệu thành công vào Database mặc định (Fallback)!" });
+    } catch (fallbackErr: any) {
+      res.status(500).json({ 
+        success: false, 
+        primary_error: e.message,
+        fallback_error: fallbackErr.message,
+        code: fallbackErr.code
+      });
+    }
   }
 });
 
