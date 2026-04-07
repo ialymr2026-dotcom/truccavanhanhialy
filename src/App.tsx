@@ -557,16 +557,26 @@ export default function App() {
       const p1 = swapData.person1.trim().normalize('NFC');
       const p2 = swapData.person2.trim().normalize('NFC');
 
-      if (swapData.date1 === swapData.date2) {
-        // Same day swap: P1 takes P2's shift, P2 takes P1's shift
-        updateMap[`${p1}|${swapData.date1}`] = swapData.shift2;
-        updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
-      } else {
-        // Different day swap
+      if (swapData.shift1 !== 'None' && swapData.shift2 !== 'None') {
+        if (swapData.date1 === swapData.date2) {
+          // Same day swap: P1 takes P2's shift, P2 takes P1's shift
+          updateMap[`${p1}|${swapData.date1}`] = swapData.shift2;
+          updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
+        } else {
+          // Different day swap
+          updateMap[`${p1}|${swapData.date1}`] = 'O';
+          updateMap[`${p1}|${swapData.date2}`] = swapData.shift2;
+          updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
+          updateMap[`${p2}|${swapData.date2}`] = 'O';
+        }
+      } else if (swapData.shift1 !== 'None' && swapData.shift2 === 'None') {
+        // P1 absent, P2 covers P1. P2 has no shift to give back.
         updateMap[`${p1}|${swapData.date1}`] = 'O';
-        updateMap[`${p1}|${swapData.date2}`] = swapData.shift2;
         updateMap[`${p2}|${swapData.date1}`] = swapData.shift1;
+      } else if (swapData.shift1 === 'None' && swapData.shift2 !== 'None') {
+        // P2 absent, P1 covers P2. P1 has no shift to give back.
         updateMap[`${p2}|${swapData.date2}`] = 'O';
+        updateMap[`${p1}|${swapData.date2}`] = swapData.shift2;
       }
 
       const updates = Object.entries(updateMap).map(([key, shift]) => {
@@ -725,7 +735,7 @@ export default function App() {
       </div>
 
       <div className="card">
-        <div className="ctitle">Thông tin nghỉ phép 
+        <div className="ctitle">Thông tin nghỉ phép
         <button
   className="btn-ex btn-word"
   onClick={() => window.open("https://script.google.com/macros/s/AKfycbwo8YVh0YbMLg3KSMoULVRG3moktSEodmY-H3ppk1ZJ0iia6hKxC-xkCKi6-WtKlBpG/exec", "_blank")}
@@ -733,7 +743,6 @@ export default function App() {
   Bảng báo cơm ca
 </button>
         </div>
-        
         {alert && <div className={`alert ${alert.startsWith('✅') ? 'asuc' : 'aerr'}`}>{alert}</div>}
         <div className="g2">
           <div className="field">
@@ -816,7 +825,7 @@ export default function App() {
               {showStaff ? 'Thu gọn ▲' : 'Chỉnh sửa ▼'}
             </button>
             <button className="staff-toggle" onClick={() => setShowSignatureManager(!showSignatureManager)}>
-              {showSignatureManager ? '✍️ Ẩn chữ ký' : '✍️ Quản lý chữ ký'}
+              {showSignatureManager ? '✍️ Ẩn chữ ký' : '✍️  Chữ ký'}
             </button>
           </div>
         </div>
@@ -866,8 +875,8 @@ export default function App() {
       </div>
 
       <div className="card">
-        <div className="ctitle">Tạo lịch đổi ca </div>
-        <p className="text-[13px] text-var(--txt2) mb-4"> Tạo nhanh văn bản "Lịch đổi ca" giữa 2 người.</p>
+        <div className="ctitle">Tạo lịch đổi ca thủ công</div>
+        <p className="text-[13px] text-var(--txt2) mb-4">Sử dụng chức năng này để tạo nhanh văn bản "Lịch đổi ca" giữa 2 nhân viên.</p>
         <div className="g2">
           <div className="field">
             <label>Chức danh</label>
@@ -926,6 +935,7 @@ export default function App() {
               <option value="N">Ca N</option>
               <option value="C">Ca C</option>
               <option value="K">Ca K</option>
+              <option value="None">Không</option>
             </select>
           </div>
           <div className="field">
@@ -934,6 +944,7 @@ export default function App() {
               <option value="N">Ca N</option>
               <option value="C">Ca C</option>
               <option value="K">Ca K</option>
+              <option value="None">Không</option>
             </select>
           </div>
         </div>
