@@ -515,18 +515,31 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
   const df2 = fmtVN(d2);
 
   let timeStr = '';
-  if (date1 === date2) {
+  let contentLines = [];
+
+  if (shift1 !== 'None' && shift2 !== 'None') {
+    if (date1 === date2) {
+      timeStr = `Ngày ${df1}.`;
+    } else {
+      const sortedDates = [d1, d2].sort((a, b) => a.getTime() - b.getTime());
+      timeStr = `Ngày ${fmtVN(sortedDates[0])} và ngày ${fmtVN(sortedDates[1])}.`;
+    }
+    contentLines.push(wpara(wrun(`+ ${person1} nghỉ ca ${shift1} ${df1}, đi ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
+    contentLines.push(wpara(wrun(`+ ${person2} đi ca ${shift1} ${df1}, nghỉ ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
+  } else if (shift1 !== 'None' && shift2 === 'None') {
     timeStr = `Ngày ${df1}.`;
-  } else {
-    const sortedDates = [d1, d2].sort((a, b) => a.getTime() - b.getTime());
-    timeStr = `Ngày ${fmtVN(sortedDates[0])} và ngày ${fmtVN(sortedDates[1])}.`;
+    contentLines.push(wpara(wrun(`+ ${person1} nghỉ ca ${shift1} ${df1}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
+    contentLines.push(wpara(wrun(`+ ${person2} đi ca ${shift1} ${df1}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
+  } else if (shift1 === 'None' && shift2 !== 'None') {
+    timeStr = `Ngày ${df2}.`;
+    contentLines.push(wpara(wrun(`+ ${person2} nghỉ ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
+    contentLines.push(wpara(wrun(`+ ${person1} đi ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }));
   }
 
   const content = [
     wpara(wrun(`- Thời gian: ${timeStr}`, { size: 26 }), { spBefore: 120, indent: { left: 720 } }),
     wpara(wrun(`- Lịch đổi ca như sau:`, { size: 26 }), { spBefore: 60, indent: { left: 720 } }),
-    wpara(wrun(`+ ${person1} nghỉ ca ${shift1} ${df1}, đi ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }),
-    wpara(wrun(`+ ${person2} đi ca ${shift1} ${df1}, nghỉ ca ${shift2} ${df2}.`, { size: 26 }), { spBefore: 60, indent: { left: 1080 } }),
+    ...contentLines,
     wpara(wrun(`Các chức danh kiểm tra lại lịch trực của mình và tự chịu trách nhiệm trước Phân xưởng nếu không đi ca theo đúng lịch đã đổi./.`, { size: 26 }), { spBefore: 120, indent: { left: 720 } })
   ].join('');
 
@@ -560,8 +573,8 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
       wtc({ w: 3000, borders: false, content: emptyP() }),
       wtc({
         w: 3180, borders: false, content:
-          wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 80 })
-          + emptyP(500, 0) + emptyP(500, 0) 
+          wpara(wrun('QUẢN ĐỐC', { bold: true, size: 24 }), { align: 'center', spBefore: 200 })
+          + sigManager
           + wpara(wrun(nguoiKy, { bold: true, size: 24 }), { align: 'center' })
       }),
       wtc({ w: 3180, borders: false, content: emptyP() })
@@ -640,6 +653,7 @@ export async function generateSwapBlob(swapData: any, config: any, signaturesOve
     + '<w:name w:val="Normal"/>'
     + '</w:style>'
     + '</w:styles>';
+
   const zip = new JSZip();
   zip.file('[Content_Types].xml', CT);
   zip.file('_rels/.rels', RELS);
