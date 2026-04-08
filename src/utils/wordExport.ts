@@ -540,7 +540,7 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
     wpara(wrun(`- Thời gian: ${timeStr}`, { size: 26 }), { spBefore: 120, indent: { left: 720 } }),
     wpara(wrun(`- Lịch đổi ca như sau:`, { size: 26 }), { spBefore: 60, indent: { left: 720 } }),
     ...contentLines,
-    wpara(wrun(`Các chức danh kiểm tra lại lịch trực của mình và tự chịu trách nhiệm trước Phân xưởng nếu không đi ca theo đúng lịch đã đổi./.`, { size: 26 }), { spBefore: 120,align: 'both', indent: { firstLine: 720 } })
+    wpara(wrun(`Các chức danh kiểm tra lại lịch trực của mình và tự chịu trách nhiệm trước Phân xưởng nếu không đi ca theo đúng lịch đã đổi./.`, { size: 26 }), { spBefore: 120, indent: { left: 720 } })
   ].join('');
 
   const sig1 = rIds.person1 ? wpara(wimage(rIds.person1), { align: 'center' }) : emptyP(1000, 0);
@@ -591,7 +591,7 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
     + hdrTbl + soNgayTbl + title + content + footTbl
     + '<w:sectPr>'
     + '<w:pgSz w:w="11906" w:h="16838"/>'
-    + '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1701" w:header="720" w:footer="720" w:gutter="0"/>'
+    + '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>'
     + '</w:sectPr>'
     + '</w:body></w:document>';
 }
