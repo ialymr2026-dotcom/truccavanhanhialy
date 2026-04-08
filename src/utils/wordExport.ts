@@ -591,7 +591,7 @@ export function buildSwapDocXml(swapData: any, config: any, rIds: any = {}) {
     + hdrTbl + soNgayTbl + title + content + footTbl
     + '<w:sectPr>'
     + '<w:pgSz w:w="11906" w:h="16838"/>'
-    + '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>'
+    + '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1701" w:header="720" w:footer="720" w:gutter="0"/>'
     + '</w:sectPr>'
     + '</w:body></w:document>';
 }
